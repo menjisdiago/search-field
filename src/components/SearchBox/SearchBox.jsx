@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import styles from './searchBox.module.css';
 import { debouncer } from '../../helper/debounce';
 import { getSuggestions } from "../../api/mockServer";
@@ -7,6 +7,7 @@ const SearchBox = () => {
   const [suggestion, setSuggestions] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [searchedValue, setSearchedValue] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [showList, setShowList] = useState(true);
   const node = useRef();
 
@@ -26,17 +27,25 @@ const SearchBox = () => {
     };
   }, [node]);
 
-  const handleOnChange = (searchValue) => {
+  const getDataFromApi = (text) => {
+    console.log('Text:  ', text)
+    getSuggestions(text)
+    .then(response => {
+      setSuggestions(response);
+      setHighlightedIndex(0);
+    })
+    .catch(error => console.log(error));
+  }
+
+  const debounce = useCallback(debouncer(getDataFromApi, 500), []);
+
+  const handleOnChange = (event) => {
+    const searchValue = event.target.value;
     setInputValue(searchValue);
     // Below gives the recent searching value for filtering suggestions
     const recentSearchValue = searchValue.trim().slice(searchValue.lastIndexOf(' ') + 1, searchValue.length);
 
-    debouncer(() => {
-      getSuggestions(recentSearchValue)
-        .then(response => setSuggestions(response))
-        .catch(error => console.log(error))
-    }, 500)();
-
+    debounce(recentSearchValue);
     setSearchedValue(recentSearchValue);
   }
 
@@ -44,6 +53,28 @@ const SearchBox = () => {
     // Below replaces the typed search(last text after white space)
     // with the clicked list value
     setInputValue(inputValue.replace(new RegExp(searchedValue + '$'), `${listValue} `));
+  }
+
+  const onKeyDown = (e) => {
+    if(!inputValue || suggestion.length === 0) {
+      return
+    }
+    switch(e.code) {
+      case 'ArrowDown':
+        e.preventDefault();
+        if (highlightedIndex < suggestion.length - 1) setHighlightedIndex(prev => prev + 1);
+        return;
+      case 'ArrowUp':
+        e.preventDefault();
+        if (highlightedIndex !== 0) setHighlightedIndex(prev => prev - 1);
+        return;
+      case 'Enter':
+        handleOnClick(suggestion[highlightedIndex]);
+        setHighlightedIndex(0);
+          return;
+      default: 
+        return;
+    }
   }
 
   return (
@@ -55,8 +86,9 @@ const SearchBox = () => {
         className={styles.inputField}
         type="text"
         value={inputValue}
-        onChange={event => handleOnChange(event.target.value)}
+        onChange={handleOnChange}
         onClick={() => setShowList(true)}
+        onKeyDown={onKeyDown}
       />
       {
         /*
@@ -70,7 +102,11 @@ const SearchBox = () => {
         && showList && (
           <ul ref={node} className={styles.suggestions}>
             {suggestion.map((suggestions, index) => (
-              <li key={index} onClick={(event) => handleOnClick(event.currentTarget.innerText)}>
+              <li 
+                className={highlightedIndex === index ? styles.highlighted : ""}
+                key={index}
+                onClick={(event) => handleOnClick(event.currentTarget.innerText)}
+              >
                 {suggestions}
               </li>
             ))}

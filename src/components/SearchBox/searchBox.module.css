@@ -30,6 +30,10 @@
   cursor: pointer;
 }
 
+.highlighted {
+  background-color: #e8f4f8;
+}
+
 .inputField {
   font-size: 15px;
   width: 250px;    
